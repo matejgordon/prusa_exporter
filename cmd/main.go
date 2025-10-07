@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/prometheus/client_golang/prometheus"
@@ -27,6 +28,65 @@ var (
 	udpPrefix              = kingpin.Flag("prefix", "Prefix for udp metrics").Default("prusa_").String()
 	udpRegistry            = prometheus.NewRegistry()
 )
+
+// handleJobImage handles requests for job images by serial number
+func handleJobImage(w http.ResponseWriter, r *http.Request, config config.Config) {
+	// Extract serial number from path: /{serial}/jobimage.png
+	path := strings.TrimPrefix(r.URL.Path, "/")
+	parts := strings.Split(path, "/")
+
+	if len(parts) != 2 || parts[1] != "jobimage.png" {
+		http.NotFound(w, r)
+		return
+	}
+
+	serial := parts[0]
+	if serial == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Find printer by serial number
+	printer, err := prusalink.FindPrinterBySerial(serial, config.Printers)
+	if err != nil {
+		log.Error().Msgf("Printer with serial %s not found: %v", serial, err)
+		http.NotFound(w, r)
+		return
+	}
+
+	// Get current job information
+	job, err := prusalink.GetJob(*printer)
+	if err != nil {
+		log.Error().Msgf("Failed to get job for printer %s: %v", serial, err)
+		http.Error(w, "Failed to get job information", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if there's an active job with a file
+	if job.Job.File.Path == "" {
+		log.Debug().Msgf("No active job or job file for printer %s", serial)
+		http.NotFound(w, r)
+		return
+	}
+
+	// Get the job image as PNG
+	imageData, err := prusalink.GetJobImagePNG(*printer, job.Job.File.Path)
+	if err != nil {
+		log.Error().Msgf("Failed to get job image for printer %s: %v", serial, err)
+		http.Error(w, "Failed to get job image", http.StatusInternalServerError)
+		return
+	}
+
+	// Set appropriate headers and serve the image
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Content-Length", strconv.Itoa(len(imageData)))
+	w.Header().Set("Cache-Control", "public, max-age=30") // Cache for 30 seconds
+
+	_, err = w.Write(imageData)
+	if err != nil {
+		log.Error().Msgf("Failed to write image data: %v", err)
+	}
+}
 
 // Run function to start the exporter
 func Run() {
@@ -84,17 +144,29 @@ func Run() {
 
 	log.Info().Msg("Listening at port: " + strconv.Itoa(*metricsPort))
 
+	// Handle job image requests and root path
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
+		// Check if the path matches the job image pattern: /{serial}/jobimage.png
+		path := r.URL.Path
+		if len(path) > 1 && strings.HasSuffix(path, "/jobimage.png") {
+			handleJobImage(w, r, config)
+			return
+		}
+
+		// Default root handler
+		html := `<html>
     <head><title>prusa_exporter 2.0.0-alpha2</title></head>
     <body>
     <h1>prusa_exporter</h1>
 	<p>Syslog server running at - <b>` + *syslogListenAddress + `</b></p>
     <p><a href="` + *metricsPath + `">PrusaLink metrics</a></p>
 	<p><a href="` + *udpMetricsPath + `">UDP Metrics</a></p>
-	<p><a href="/udp">Reenable UDP Metrics</a></p> <!-- not working yet -->
+	<h2>Job Images</h2>
+	<p>Access job images via: <code>/{printer-serial}/jobimage.png</code></p>
+	<p>Example: <code>/12345-4235324534563453/jobimage.png</code></p>
 	</body>
-    </html>`))
+    </html>`
+		w.Write([]byte(html))
 	})
 
 	log.Fatal().Msg(http.ListenAndServe(":"+strconv.Itoa(*metricsPort), nil).Error())

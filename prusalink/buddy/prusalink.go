@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"image"
+	_ "image/gif"  // Import for side effects (format registration)
+	_ "image/jpeg" // Import for side effects (format registration)
 	"image/png"
 	"io"
 	"net/http"
@@ -297,22 +300,90 @@ func GetPrinterProfiles(printer config.Printers) (PrinterProfiles, error) {
 func GetJobImage(printer config.Printers, imagePath string) (string, error) { // returns base64 encoded image
 	//http://192.168.20.50/thumb/l/usb/PYTHON~1.BGC
 	response, err := accessPrinterEndpoint("/thumb/l"+imagePath, printer)
-
-	image, err := compressPNG(response, png.BestCompression)
-
 	if err != nil {
 		return "", err
 	}
 
-	return base64.StdEncoding.EncodeToString(image), err
+	image, err := compressPNG(response, png.BestCompression)
+	if err != nil {
+		return "", err
+	}
+
+	return base64.StdEncoding.EncodeToString(image), nil
 }
 
-func compressPNG(input []byte, compressionLevel png.CompressionLevel) ([]byte, error) {
-	img, _, err := image.Decode(bytes.NewReader(input))
-
+// GetJobImagePNG is used to get the printer's job image as PNG bytes
+func GetJobImagePNG(printer config.Printers, imagePath string) ([]byte, error) {
+	response, err := accessPrinterEndpoint("/thumb/l"+imagePath, printer)
 	if err != nil {
 		return nil, err
 	}
+
+	// Log the response size and first few bytes for debugging
+	log.Debug().Msgf("Received image data: %d bytes", len(response))
+	if len(response) > 0 {
+		log.Debug().Msgf("First few bytes: %x", response[:min(16, len(response))])
+	}
+
+	// Check if the response is empty
+	if len(response) == 0 {
+		return nil, fmt.Errorf("received empty image data")
+	}
+
+	// Try to convert to PNG, but handle different input formats
+	image, err := convertToPNG(response, png.BestCompression)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert image to PNG: %w", err)
+	}
+
+	return image, nil
+}
+
+// GetJobImageRaw returns the raw image data without conversion
+func GetJobImageRaw(printer config.Printers, imagePath string) ([]byte, error) {
+	response, err := accessPrinterEndpoint("/thumb/l"+imagePath, printer)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(response) == 0 {
+		return nil, fmt.Errorf("received empty image data")
+	}
+
+	return response, nil
+}
+
+// FindPrinterBySerial finds a printer in the configuration by its serial number
+func FindPrinterBySerial(serial string, printers []config.Printers) (*config.Printers, error) {
+	for _, printer := range printers {
+		info, err := GetInfo(printer)
+		if err != nil {
+			continue // Skip this printer if we can't get info
+		}
+		if info.Serial == serial {
+			return &printer, nil
+		}
+	}
+	return nil, fmt.Errorf("printer with serial %s not found", serial)
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+// convertToPNG converts input image data to PNG format
+func convertToPNG(input []byte, compressionLevel png.CompressionLevel) ([]byte, error) {
+	// Try to decode the image, supporting multiple formats
+	img, format, err := image.Decode(bytes.NewReader(input))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode image (detected format: %s): %w", format, err)
+	}
+
+	log.Debug().Msgf("Successfully decoded image format: %s", format)
 
 	var compressedBuffer bytes.Buffer
 	encoder := png.Encoder{
@@ -320,12 +391,15 @@ func compressPNG(input []byte, compressionLevel png.CompressionLevel) ([]byte, e
 	}
 
 	err = encoder.Encode(&compressedBuffer, img)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to encode image as PNG: %w", err)
 	}
 
 	return compressedBuffer.Bytes(), nil
+}
+
+func compressPNG(input []byte, compressionLevel png.CompressionLevel) ([]byte, error) {
+	return convertToPNG(input, compressionLevel)
 }
 
 // GetPrinterType returns the printer type of the given printer - e.g. "MINI", "MK4", "XL", "I3MK3S", "I3MK3", "I3MK25S",
