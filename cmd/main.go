@@ -92,6 +92,7 @@ func Run() {
 	<p>Syslog server running at - <b>` + *syslogListenAddress + `</b></p>
     <p><a href="` + *metricsPath + `">PrusaLink metrics</a></p>
 	<p><a href="` + *udpMetricsPath + `">UDP Metrics</a></p>
+	<p><a href="/udp">Reenable UDP Metrics</a></p> <!-- not working yet -->
 	</body>
     </html>`))
 	})

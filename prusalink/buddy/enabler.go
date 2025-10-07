@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/icholy/digest"
@@ -15,7 +14,6 @@ import (
 )
 
 var (
-	localIP       string
 	listOfMetrics = []string{
 		"temp_noz",
 		"ttemp_noz",
@@ -35,8 +33,8 @@ var (
 // getLocalIP finds and returns the first non-loopback local IP address.
 func getLocalIP() (string, error) {
 
-	if localIP != "" {
-		return localIP, nil
+	if configuration.Exporter.IpOverride != "" {
+		return configuration.Exporter.IpOverride, nil
 	}
 
 	interfaces, err := net.Interfaces()
@@ -76,13 +74,13 @@ func getLocalIP() (string, error) {
 	return "", fmt.Errorf("could not find a valid local IP address")
 }
 
-func gcodeInit() (init string, err error) {
+func gcodeInit(printer config.Printers) (init string, err error) {
+	var builder strings.Builder
+
 	ip, err := getLocalIP()
 	if err != nil {
 		return "", fmt.Errorf("failed to get local IP address: %v", err)
 	}
-
-	var builder strings.Builder
 
 	// Write the initial lines
 	builder.WriteString(fmt.Sprintf("M330 SYSLOG\nM334 %s 8514", ip))
@@ -98,7 +96,9 @@ func gcodeInit() (init string, err error) {
 
 func sendGcode(filename string, printer config.Printers) ([]byte, error) {
 
-	gcode, err := gcodeInit()
+	deleteGcode(filename, printer) // ignore error, file might not exist
+
+	gcode, err := gcodeInit(printer)
 	if err != nil {
 		return nil, fmt.Errorf("error creating gcode init: %w", err)
 	}
@@ -123,6 +123,7 @@ func sendGcode(filename string, printer config.Printers) ([]byte, error) {
 
 	// Set a Content-Type header if needed
 	req.Header.Set("Content-Type", "text/x.gcode")
+	req.Header.Set("Overwrite", "?1")
 
 	// Send the request
 	res, err := client.Do(req)
@@ -137,6 +138,41 @@ func sendGcode(filename string, printer config.Printers) ([]byte, error) {
 		return nil, fmt.Errorf("error reading response body: %w", err)
 	}
 
+	return result, nil
+}
+
+func deleteGcode(filename string, printer config.Printers) ([]byte, error) {
+
+	url := fmt.Sprintf("http://%s/api/v1/files/usb//%s", printer.Address, filename)
+
+	client := &http.Client{
+		Transport: &digest.Transport{
+			Username: printer.Username,
+			Password: printer.Password,
+		},
+		Timeout: 5 * time.Duration(configuration.Exporter.ScrapeTimeout) * time.Second,
+	}
+
+	// Create a new DELETE request. The third argument is nil as DELETE requests do not have a body.
+	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating DELETE request: %w", err)
+	}
+
+	// Send the request.
+	res, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error sending DELETE request: %w", err)
+	}
+	defer res.Body.Close()
+
+	// Read the response body.
+	result, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %w", err)
+	}
+
+	// Return the response body from the server.
 	return result, nil
 }
 
@@ -172,35 +208,28 @@ func startGcode(filename string, printer config.Printers) ([]byte, error) {
 }
 
 func EnableUDPmetrics(printers []config.Printers) error {
-	var wg sync.WaitGroup
 	for _, s := range printers {
-		wg.Add(1)
-		go func(s config.Printers) {
-			defer wg.Done()
 
-			log.Debug().Msg("Enabling UDP metrics at " + s.Address)
+		log.Debug().Msg("Enabling UDP metrics at " + s.Address)
 
-			send, err := sendGcode("enable_udp_metrics.gcode", s)
+		send, err := sendGcode("enable_udp_metrics.gcode", s)
 
-			if err != nil {
-				log.Error().Msg("Failed to send gcode to " + s.Address + ": " + err.Error())
-				return
-			}
-			log.Debug().Msg("Gcode sent to " + s.Address + ": " + string(send))
+		if err != nil {
+			log.Error().Msg("Failed to send gcode to " + s.Address + ": " + err.Error())
+			return err
+		}
+		log.Debug().Msg("Gcode sent to " + s.Address + ": " + string(send))
 
-			start, err := startGcode("enable_udp_metrics.gcode", s)
+		start, err := startGcode("enable_udp_metrics.gcode", s)
 
-			if err != nil {
-				log.Error().Msg("Failed to start gcode at " + s.Address + ": " + err.Error())
-				return
-			}
-			log.Debug().Msg("Gcode started at " + s.Address + ": " + string(start))
+		if err != nil {
+			log.Error().Msg("Failed to start gcode at " + s.Address + ": " + err.Error())
+			return err
+		}
+		log.Debug().Msg("Gcode started at " + s.Address + ": " + string(start))
 
-			s.UDPMetricsEnabled = true
-			log.Info().Msgf("UDP metrics enabled for printer %s (%s)", s.Name, s.Address)
-		}(s)
+		s.UDPMetricsEnabled = true
+		log.Info().Msgf("UDP metrics enabled for printer %s (%s)", s.Name, s.Address)
 	}
-	wg.Wait()
-
 	return nil
 }
