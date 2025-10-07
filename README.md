@@ -90,23 +90,25 @@ alpha2
 - [x] update dashboard for Core One / MK4S
 
 alpha3
-- [ ] compress image of print
-- [ ] rename udp metrics
+- [ ] auto enable syslog metrics
+- [ ] check if the address from the udp and prusalink metrics are the same
+- [ ] ~~compress image of print~~ - expose link to image instead
+- [ ] ~~rename udp metrics~~ - keeping old names for compatibility with metrics_handler
 - [ ] check PrusaLink metrics
 - [ ] XL dashboard
 
 alpha4
-- [ ] PoC controlling printer via Grafana
+- [ ] ~~PoC controlling printer via Grafana~~ - PoC work but it's flawed - scrapping
 - [ ] Mini dashboard
 
 beta1
-- [ ] start testing at Raspberry Pi 4 (if not feasible then 5)
+- [ ] ~~start testing at Raspberry Pi 4 (if not feasible then 5)~~ - not going to build Raspberry Pi image
 - [ ] create tests
 - [ ] reenable tests in pipeline
 
 beta2
 - [ ] improve stability and optimize code
-- [ ] finalize controlling printer via Grafana
+- [ ] ~~finalize controlling printer via Grafana~~
 
 rc1
 - [ ] create overview dashboard for all printers in system
