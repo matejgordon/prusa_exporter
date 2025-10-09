@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -14,6 +15,8 @@ type Config struct {
 		ScrapeTimeout int    `yaml:"scrape_timeout"`
 		LogLevel      string `yaml:"log_level"`
 		IpOverride    string
+		AllMetricsUDP bool
+		ExtraMetrics  []string
 	} `yaml:"exporter"`
 	Printers  []Printers `yaml:"printers"`
 	PrusaLink struct {
@@ -35,7 +38,7 @@ type Printers struct {
 }
 
 // LoadConfig function to load and parse the configuration file
-func LoadConfig(path string, prusaLinkScrapeTimeout int, ipOverride string) (Config, error) {
+func LoadConfig(path string, prusaLinkScrapeTimeout int, udpIpOverride string, udpAllMetrics bool, udpExtraMetrics string) (Config, error) {
 	var config Config
 	file, err := os.ReadFile(path)
 
@@ -47,10 +50,22 @@ func LoadConfig(path string, prusaLinkScrapeTimeout int, ipOverride string) (Con
 		return config, err
 	}
 	config.Exporter.ScrapeTimeout = prusaLinkScrapeTimeout
-	if ipOverride != "" {
-		config.Exporter.IpOverride = ipOverride
-		log.Info().Msgf("Overriding IP address for UDP metrics: %s", ipOverride)
+	if udpIpOverride != "" {
+		config.Exporter.IpOverride = udpIpOverride
+		log.Info().Msgf("Overriding IP address for UDP metrics: %s", udpIpOverride)
 	}
+
+	config.Exporter.AllMetricsUDP = udpAllMetrics
+	if udpAllMetrics {
+		log.Warn().Msg("Exposing all UDP metrics. This will severely impact CPU capabilities of the printer!")
+	}
+
+	if udpExtraMetrics != "" {
+		splitMetrics := strings.Split(udpExtraMetrics, ",")
+		config.Exporter.ExtraMetrics = splitMetrics
+		log.Info().Msgf("Adding extra UDP metrics: %v", splitMetrics)
+	}
+
 	return config, err
 }
 

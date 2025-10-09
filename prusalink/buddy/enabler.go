@@ -86,6 +86,22 @@ func gcodeInit() (init string, err error) {
 	// Write the initial lines
 	builder.WriteString(fmt.Sprintf("M330 SYSLOG\nM334 %s 8514", ip))
 
+	if configuration.Exporter.AllMetricsUDP {
+		for _, metric := range allMetricsList {
+			builder.WriteString(fmt.Sprintf("\nM331 %s", metric))
+		}
+		return builder.String(), nil
+	}
+
+	for _, metric := range allMetricsList {
+		builder.WriteString(fmt.Sprintf("\nM332 %s", metric)) // disable all metrics first for ease the life of the MCU
+	}
+
+	if len(configuration.Exporter.ExtraMetrics) > 0 {
+		log.Info().Msgf("Adding extra UDP metrics: %v", configuration.Exporter.ExtraMetrics)
+		listOfMetrics = append(listOfMetrics, configuration.Exporter.ExtraMetrics...)
+	}
+
 	// Loop through the list of metrics and append each line
 	for _, metric := range listOfMetrics {
 		builder.WriteString(fmt.Sprintf("\nM331 %s", metric))
