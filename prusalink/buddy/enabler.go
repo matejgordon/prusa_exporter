@@ -224,6 +224,7 @@ func EnableUDPmetrics(printers []config.Printers) {
 
 			if err != nil {
 				log.Error().Msg("Failed to send gcode to " + s.Address + ": " + err.Error())
+				configuration.Printers[i].UDPMetricsEnabled = false
 				return
 			}
 			log.Debug().Msg("Gcode sent to " + s.Address + ": " + string(send))
@@ -232,6 +233,7 @@ func EnableUDPmetrics(printers []config.Printers) {
 
 			if err != nil {
 				log.Error().Msg("Failed to start gcode at " + s.Address + ": " + err.Error())
+				configuration.Printers[i].UDPMetricsEnabled = false
 				return
 			}
 			log.Debug().Msg("Gcode started at " + s.Address + ": " + string(start))
