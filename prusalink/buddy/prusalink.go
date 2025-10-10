@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"image"
 	"image/png"
 	"io"
@@ -308,35 +307,6 @@ func GetJobImage(printer config.Printers, imagePath string) (string, error) { //
 	}
 
 	return base64.StdEncoding.EncodeToString(image), nil
-}
-
-// GetJobImagePNG is used to get the printer's job image as PNG bytes
-func GetJobImagePNG(printer config.Printers, imagePath string) ([]byte, error) {
-	response, err := accessPrinterEndpoint("/thumb/l"+imagePath, printer)
-	if err != nil {
-		return nil, err
-	}
-
-	image, err := compressPNG(response, png.BestCompression)
-	if err != nil {
-		return nil, err
-	}
-
-	return image, nil
-}
-
-// FindPrinterBySerial finds a printer in the configuration by its serial number
-func FindPrinterBySerial(serial string, printers []config.Printers) (*config.Printers, error) {
-	for _, printer := range printers {
-		info, err := GetInfo(printer)
-		if err != nil {
-			continue // Skip this printer if we can't get info
-		}
-		if info.Serial == serial {
-			return &printer, nil
-		}
-	}
-	return nil, fmt.Errorf("printer with serial %s not found", serial)
 }
 
 func compressPNG(input []byte, compressionLevel png.CompressionLevel) ([]byte, error) {

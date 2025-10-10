@@ -128,3 +128,57 @@ After start of the exporter G-Code containing configuration is sent to the print
 
 This is correct - just click on PRINT and that's it. It's possible to technically avoid this but even then you will be informed that G-Code is changing metrics configuration so it's pointless.
 
+### My printer has UDP metrics host set as 172.x.x.x
+
+That is because you haven't stared the docker compose with `start_docker.sh`. This script will export HOST_IP address and `docker-compose` will pass it into exporter.
+
+### What UDP metrics are enabled?
+
+- temp_ambient
+- temp_bed
+- temp_brd
+- temp_chamber
+- temp_mcu
+- temp_noz
+- temp_hbr
+- temp_psu
+- temp_sandwich
+- temp_splitter
+- dwarf_mcu_temp
+- dwarf_board_temp
+- buddy_temp
+- bedlet_temp
+- bed_mcu_temp
+- chamber_temp
+- ttemp_noz
+- ttemp_bed
+- chamber_ttemp
+- curr_inp
+- Sandwitch5VCurrent
+- splitter_5V_current
+- bed_curr
+- bedlet_curr
+- curr_nozz
+- dwarf_heat_curr
+- xlbuddy5VCurrent
+- eth_in
+- eth_out
+- esp_in
+- esp_out
+- volt_bed
+- volt_nozz
+- 24VVoltage
+- 5VVoltage
+- loadcell_value
+- fan
+- fan_hbr_speed
+- fan_speed
+- xbe_fan
+- print_fan_act
+- hbr_fan_act
+- hbr_fan_enc
+- cpu_usage
+- heap
+- heap_free
+- heap_total
+- fsensor

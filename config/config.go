@@ -17,6 +17,7 @@ type Config struct {
 		IpOverride    string
 		AllMetricsUDP bool
 		ExtraMetrics  []string
+		LokiPushURL   string
 	} `yaml:"exporter"`
 	Printers  []Printers `yaml:"printers"`
 	PrusaLink struct {
@@ -38,7 +39,7 @@ type Printers struct {
 }
 
 // LoadConfig function to load and parse the configuration file
-func LoadConfig(path string, prusaLinkScrapeTimeout int, udpIpOverride string, udpAllMetrics bool, udpExtraMetrics string) (Config, error) {
+func LoadConfig(path string, prusaLinkScrapeTimeout int, udpIpOverride string, udpAllMetrics bool, udpExtraMetrics string, lokiPushUrl string) (Config, error) {
 	var config Config
 	file, err := os.ReadFile(path)
 
@@ -64,6 +65,11 @@ func LoadConfig(path string, prusaLinkScrapeTimeout int, udpIpOverride string, u
 		splitMetrics := strings.Split(udpExtraMetrics, ",")
 		config.Exporter.ExtraMetrics = splitMetrics
 		log.Info().Msgf("Adding extra UDP metrics: %v", splitMetrics)
+	}
+
+	config.Exporter.LokiPushURL = lokiPushUrl
+	if lokiPushUrl == "" {
+		log.Debug().Msgf("Loki push URL not set, image will not be pushed to Loki")
 	}
 
 	return config, err
