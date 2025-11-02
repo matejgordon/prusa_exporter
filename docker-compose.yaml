@@ -18,10 +18,10 @@ services:
     networks:
       - pubel
     volumes:
-      - ./docs/config/grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
-      - ./docs/config/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./docs/config/grafana/provisioning/dashboards:/var/lib/grafana/dashboards
       - ./docs/config/grafana/plugins:/var/lib/grafana/plugins
+      - ./docs/config/grafana/provisioning:/etc/grafana/provisioning
 
   exporter:
     image: pubeldev/prusa_exporter:2.0.0-alpha3
